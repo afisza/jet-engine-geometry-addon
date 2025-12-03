@@ -72,6 +72,7 @@ class Jet_Geometry_Autoloader {
 			'Jet_Geometry_GeoJSON_Simplifier' => 'includes/geojson-simplifier.php',
 			'Jet_Geometry_Country_Geojson_File' => 'includes/country-geojson-file.php',
 			'Jet_Geometry_Markers_Cache' => 'includes/markers-cache.php',
+			'Jet_Geometry_GitHub_Updater' => 'includes/github-updater.php',
 		);
 	}
 

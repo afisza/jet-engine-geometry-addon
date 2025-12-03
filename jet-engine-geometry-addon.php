@@ -169,6 +169,11 @@ class Jet_Engine_Geometry_Addon {
 		// Load autoloader
 		$this->load_autoloader();
 
+		// Initialize GitHub Updater (must be early)
+		if ( class_exists( 'Jet_Geometry_GitHub_Updater' ) ) {
+			new Jet_Geometry_GitHub_Updater();
+		}
+
 		// Load textdomain
 		add_action( 'init', array( $this, 'load_textdomain' ) );
 
