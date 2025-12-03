@@ -74,12 +74,13 @@ class Jet_Geometry_GitHub_Updater {
 			return $transient;
 		}
 
-		$current_version = JET_GEOMETRY_ADDON_VERSION;
+		// Get current version from plugin file header (not constant)
+		$plugin_data = get_plugin_data( $this->plugin_file );
+		$current_version = $plugin_data['Version'];
 		$latest_version  = $this->normalize_version( $latest_release->tag_name );
 
 		// Compare versions
 		if ( version_compare( $current_version, $latest_version, '<' ) ) {
-			$plugin_data = get_plugin_data( $this->plugin_file );
 
 			$update = new stdClass();
 			$update->id          = $this->plugin_slug;
@@ -254,6 +255,9 @@ class Jet_Geometry_GitHub_Updater {
 
 		// Clear update cache
 		delete_transient( 'jet_geometry_latest_release' );
+		
+		// Clear WordPress plugins cache to refresh version info
+		wp_clean_plugins_cache();
 
 		return $response;
 	}
