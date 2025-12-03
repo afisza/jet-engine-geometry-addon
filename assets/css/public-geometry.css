@@ -1,0 +1,72 @@
+/**
+ * Jet Geometry Renderer - Frontend Styles
+ */
+
+/* Map Container */
+.jet-map-listing {
+	position: relative;
+}
+
+/* Geometry Layers */
+.jet-geometry-layer {
+	pointer-events: all;
+}
+
+/* Popups */
+/* Popup base overrides */
+.mapboxgl-popup-content {
+	padding: 0;
+	max-width: none;
+	background: transparent;
+	box-shadow: none;
+}
+
+.jet-geometry-popup {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, sans-serif;
+}
+
+.jet-geometry-popup h3 {
+	margin: 0 0 10px;
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.jet-geometry-popup p {
+	margin: 5px 0;
+	font-size: 14px;
+	line-height: 1.5;
+}
+
+.jet-geometry-popup a {
+	color: #0073aa;
+	text-decoration: none;
+}
+
+.jet-geometry-popup a:hover {
+	text-decoration: underline;
+}
+
+/* Loading State */
+.jet-geometry-loading {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(255, 255, 255, 0.9);
+	padding: 20px;
+	border-radius: 4px;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+	z-index: 1000;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+	.mapboxgl-popup-content {
+		max-width: none;
+		padding: 0;
+	}
+}
+
+
+
+

@@ -1,0 +1,41 @@
+# WordPress
+.DS_Store
+Thumbs.db
+wp-config.php
+wp-content/uploads/
+wp-content/cache/
+
+# IDEs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Node
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Build
+dist/
+build/
+*.map
+
+# Logs
+*.log
+
+# Misc
+.sass-cache/
+
+
+
+
+
+
+
+
+
+
+
+
+

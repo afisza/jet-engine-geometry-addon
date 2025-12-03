@@ -1,0 +1,240 @@
+/**
+ * Jet Geometry Field - Admin Styles
+ */
+
+.jet-geometry-field__container {
+	margin-top: 10px;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	background: #fff;
+	padding: 15px;
+}
+
+/* Type Selector */
+.jet-geometry-field__type-selector {
+	margin-bottom: 15px;
+	padding-bottom: 15px;
+	border-bottom: 1px solid #eee;
+}
+
+.jet-geometry-field__type-selector label {
+	display: block;
+	margin-bottom: 8px;
+	font-weight: 600;
+}
+
+.jet-geometry-type-btn {
+	margin-right: 8px;
+	margin-bottom: 5px;
+}
+
+.jet-geometry-type-btn[aria-pressed="true"] {
+	background: #0073aa;
+	color: #fff;
+	border-color: #0073aa;
+}
+
+.jet-geometry-type-btn .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	vertical-align: text-bottom;
+}
+
+/* Search */
+.jet-geometry-field__search {
+	position: relative;
+	margin-bottom: 15px;
+}
+
+.jet-geometry-search-input {
+	width: 100%;
+	padding: 8px 12px;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+}
+
+.jet-geometry-field__search-results {
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	background: #fff;
+	border: 1px solid #ddd;
+	border-top: none;
+	border-radius: 0 0 4px 4px;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+	max-height: 300px;
+	overflow-y: auto;
+	z-index: 100;
+}
+
+.jet-geometry-search-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.jet-geometry-search-list li {
+	padding: 10px 15px;
+	cursor: pointer;
+	border-bottom: 1px solid #eee;
+	transition: background 0.2s;
+}
+
+.jet-geometry-search-list li:hover {
+	background: #f5f5f5;
+}
+
+.jet-geometry-search-list li:last-child {
+	border-bottom: none;
+}
+
+.jet-geometry-loading,
+.jet-geometry-no-results,
+.jet-geometry-error {
+	padding: 10px 15px;
+	text-align: center;
+	color: #666;
+}
+
+.jet-geometry-error {
+	color: #d63638;
+}
+
+/* Coordinates Input */
+.jet-geometry-field__coords {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 15px;
+}
+
+.jet-geometry-coords-input {
+	flex: 1;
+	padding: 6px 12px;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+}
+
+.jet-geometry-set-coords-btn {
+	white-space: nowrap;
+}
+
+/* Map Container */
+.jet-geometry-field__map {
+	width: 100%;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+	margin-bottom: 15px;
+}
+
+.jet-geometry-field__map canvas {
+	outline: none;
+}
+
+/* Info */
+.jet-geometry-field__info {
+	display: flex;
+	gap: 15px;
+	padding: 10px;
+	background: #f5f5f5;
+	border-radius: 4px;
+	margin-bottom: 15px;
+	font-size: 13px;
+}
+
+.jet-geometry-current-type,
+.jet-geometry-current-coords {
+	color: #666;
+}
+
+.jet-geometry-current-type:before {
+	content: 'Type: ';
+	font-weight: 600;
+	color: #000;
+}
+
+.jet-geometry-current-coords:before {
+	content: 'Centroid: ';
+	font-weight: 600;
+	color: #000;
+}
+
+/* Actions */
+.jet-geometry-field__actions {
+	display: flex;
+	gap: 8px;
+}
+
+.jet-geometry-pan-btn .dashicons,
+.jet-geometry-reset-btn .dashicons,
+.jet-geometry-delete-btn .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	vertical-align: text-bottom;
+}
+
+.jet-geometry-pan-btn.is-active {
+	background: #005a87;
+	border-color: #005a87;
+	color: #fff;
+}
+
+.jet-geometry-pan-btn.is-active .dashicons {
+	color: #fff;
+}
+
+.jet-geometry-delete-btn {
+	color: #d63638;
+	border-color: #d63638;
+}
+
+.jet-geometry-delete-btn:hover {
+	background: #d63638;
+	color: #fff;
+}
+
+/* Mapbox Draw Custom Styles */
+.mapbox-gl-draw_ctrl-draw-btn {
+	background-color: #0073aa;
+	border: 1px solid #0073aa;
+}
+
+.mapbox-gl-draw_ctrl-draw-btn:hover {
+	background-color: #005a87;
+}
+
+/* Responsive */
+@media (max-width: 782px) {
+	.jet-geometry-field__container {
+		padding: 10px;
+	}
+
+	.jet-geometry-type-btn {
+		font-size: 13px;
+		padding: 5px 10px;
+		height: auto;
+	}
+
+	.jet-geometry-field__map {
+		min-height: 300px;
+	}
+
+	.jet-geometry-field__info {
+		flex-direction: column;
+		gap: 5px;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
