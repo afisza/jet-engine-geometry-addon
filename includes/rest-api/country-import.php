@@ -193,12 +193,15 @@ class Jet_Geometry_REST_Country_Import extends Jet_Geometry_REST_Base {
 				$updated++;
 			}
 
+			// Extract main polygon from MultiPolygon if needed (for countries with overseas territories)
+			$geometry_to_save = $this->extract_main_polygon( $feature['geometry'] );
+
 			// Save GeoJSON to term meta
-			$geojson = wp_json_encode( $feature['geometry'] );
+			$geojson = wp_json_encode( $geometry_to_save );
 			update_term_meta( $term_id, '_country_geojson', $geojson );
 
 			// Simplify and save
-			$simplified = $this->simplify_geometry( $feature['geometry'] );
+			$simplified = $this->simplify_geometry( $geometry_to_save );
 			if ( $simplified ) {
 				update_term_meta( $term_id, '_country_geojson_simplified', wp_json_encode( $simplified ) );
 			}
@@ -220,6 +223,64 @@ class Jet_Geometry_REST_Country_Import extends Jet_Geometry_REST_Base {
 			'updated'  => $updated,
 			'errors'   => $errors,
 		);
+	}
+
+	/**
+	 * Extract main polygon from MultiPolygon.
+	 * For countries with multiple territories, selects the largest one (usually the mainland).
+	 *
+	 * @param array $geometry Geometry data.
+	 * @return array Geometry with main polygon only.
+	 */
+	private function extract_main_polygon( $geometry ) {
+		if ( ! isset( $geometry['type'], $geometry['coordinates'] ) ) {
+			return $geometry;
+		}
+
+		// If it's already a Polygon, return as is
+		if ( 'Polygon' === $geometry['type'] ) {
+			return $geometry;
+		}
+
+		// If it's MultiPolygon, find the largest part
+		if ( 'MultiPolygon' === $geometry['type'] ) {
+			$polygons = $geometry['coordinates'];
+			
+			if ( empty( $polygons ) ) {
+				return $geometry;
+			}
+
+			// If only one polygon, convert to Polygon
+			if ( count( $polygons ) === 1 ) {
+				return array(
+					'type'        => 'Polygon',
+					'coordinates' => $polygons[0],
+				);
+			}
+
+			// Find the largest polygon by counting points in the outer ring
+			$largest_index = 0;
+			$largest_size  = 0;
+
+			foreach ( $polygons as $index => $polygon ) {
+				if ( ! empty( $polygon[0] ) && is_array( $polygon[0] ) ) {
+					$size = count( $polygon[0] );
+					if ( $size > $largest_size ) {
+						$largest_size  = $size;
+						$largest_index = $index;
+					}
+				}
+			}
+
+			// Return the largest polygon as a single Polygon
+			return array(
+				'type'        => 'Polygon',
+				'coordinates' => $polygons[ $largest_index ],
+			);
+		}
+
+		// For other types, return as is
+		return $geometry;
 	}
 
 	/**

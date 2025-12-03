@@ -4,7 +4,7 @@ Tags: jetengine, maps, geometry, mapbox, geojson
 Requires at least: 6.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.3.2
+Stable tag: 1.0.3.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,11 @@ Yes, the plugin integrates with JetEngine's existing page builder integrations.
 5. Drawing interface in action
 
 == Changelog ==
+
+= 1.0.3.3 =
+* Fixed MultiPolygon import issue for countries with overseas territories (e.g., France, Austria)
+* Added extract_main_polygon function to select the largest polygon (mainland) from MultiPolygon geometries
+* Countries with multiple territories now correctly import with mainland geometry instead of small overseas territories
 
 = 1.0.3.2 =
 * Added GitHub Updater integration for automatic updates from GitHub Releases
