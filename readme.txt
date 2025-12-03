@@ -4,7 +4,7 @@ Tags: jetengine, maps, geometry, mapbox, geojson
 Requires at least: 6.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.3.1
+Stable tag: 1.0.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,11 @@ Yes, the plugin integrates with JetEngine's existing page builder integrations.
 5. Drawing interface in action
 
 == Changelog ==
+
+= 1.0.3.2 =
+* Added GitHub Updater integration for automatic updates from GitHub Releases
+* Plugin can now be updated directly from WordPress Admin
+* Automatic version checking every 12 hours
 
 = 1.0.3.1 =
 * Fixed ISO code import issue for countries with -99 placeholder (e.g., France)
