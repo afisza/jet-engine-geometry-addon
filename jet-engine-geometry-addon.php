@@ -3,7 +3,7 @@
  * Plugin Name: JetEngine Geometry Addon
  * Plugin URI: https://yourwebsite.com/jet-engine-geometry-addon
  * Description: Extends JetEngine Maps Listing with Line and Polygon geometry support, plus country layers integration with Mapbox API
- * Version: 1.0.3.4
+ * Version: 1.0.3.5
  * Author: Alex Shram
  * Author URI: https://afisza.com
  * Text Domain: jet-geometry-addon
@@ -22,7 +22,7 @@ if ( ! defined( 'WPINC' ) ) {
 /**
  * Currently plugin version.
  */
-define( 'JET_GEOMETRY_ADDON_VERSION', '1.0.3.4' );
+define( 'JET_GEOMETRY_ADDON_VERSION', '1.0.3.5' );
 define( 'JET_GEOMETRY_ADDON_FILE', __FILE__ );
 define( 'JET_GEOMETRY_ADDON_PATH', plugin_dir_path( __FILE__ ) );
 define( 'JET_GEOMETRY_ADDON_URL', plugin_dir_url( __FILE__ ) );

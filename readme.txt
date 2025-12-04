@@ -4,7 +4,7 @@ Tags: jetengine, maps, geometry, mapbox, geojson
 Requires at least: 6.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.3.4
+Stable tag: 1.0.3.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,12 @@ Yes, the plugin integrates with JetEngine's existing page builder integrations.
 5. Drawing interface in action
 
 == Changelog ==
+
+= 1.0.3.5 =
+* Added visual distinction for subcategories in incident-type filter (prefix "- " before subcategory names)
+* Fixed date range filter compatibility with Map Listing markers
+* Improved AJAX handling for term parent checking
+* Fixed taxonomy name handling (incident-type vs incident_types)
 
 = 1.0.3.4 =
 * Fixed GitHub Updater version comparison issue - now uses get_plugin_data() instead of constant
