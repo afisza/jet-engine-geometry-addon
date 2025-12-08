@@ -185,41 +185,9 @@
 			// Bind toggle controls
 			$(document).on('change', '#show-country-layers, .jet-country-layers-checkbox', function() {
 				var isChecked = $(this).is(':checked');
+				console.log('[JetCountryLayers] 🔘 Toggle switch changed:', { isChecked: isChecked, elementId: this.id, className: this.className });
 				// Always persist when user explicitly toggles
 				self.toggleCountryLayers(isChecked, { persist: true });
-			});
-			
-			// Add touch support for mobile devices
-			$(document).on('touchstart', '.jet-country-layers-toggle', function(e) {
-				// Prevent double-tap zoom on iOS
-				if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 1) {
-					e.preventDefault();
-					return;
-				}
-			});
-			
-			$(document).on('touchend', '.jet-country-layers-toggle', function(e) {
-				e.preventDefault();
-				var $checkbox = $(this).find('.jet-country-layers-checkbox, #show-country-layers');
-				if ($checkbox.length) {
-					// Toggle checkbox state
-					$checkbox.prop('checked', !$checkbox.prop('checked'));
-					// Trigger change event
-					$checkbox.trigger('change');
-				}
-			});
-			
-			// Also handle click on label for better compatibility
-			$(document).on('click', '.jet-country-layers-toggle', function(e) {
-				// Only handle if click is not directly on checkbox
-				if ($(e.target).is('.toggle-checkbox, .jet-country-layers-checkbox')) {
-					return; // Let default behavior handle it
-				}
-				var $checkbox = $(this).find('.jet-country-layers-checkbox, #show-country-layers');
-				if ($checkbox.length) {
-					$checkbox.prop('checked', !$checkbox.prop('checked'));
-					$checkbox.trigger('change');
-				}
 			});
 
 			// Bind reset zoom
@@ -290,7 +258,19 @@
 		},
 
 		ensureRestUrl: function() {
+			// Check if restUrl is already set and correct
 			if ( JetCountryLayersData.restUrl ) {
+				// Fix restUrl if it doesn't include the subdirectory path
+				var pathname = window.location.pathname || '';
+				var basePath = pathname.split('/').slice(0, -1).join('/') || '';
+				
+				// If restUrl doesn't contain the base path, fix it
+				if ( basePath && JetCountryLayersData.restUrl.indexOf(basePath) === -1 ) {
+					var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+					var restPath = JetCountryLayersData.restUrl.replace(/^https?:\/\/[^\/]+/, '');
+					JetCountryLayersData.restUrl = origin + basePath + restPath;
+				}
+				
 				return JetCountryLayersData.restUrl;
 			}
 
@@ -299,8 +279,12 @@
 			if ( window.wpApiSettings && window.wpApiSettings.root ) {
 				root = window.wpApiSettings.root;
 			} else {
+				// Use current page pathname to preserve subdirectory (e.g., /rhot)
 				var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
-				root = origin.replace(/\/$/, '') + '/wp-json/';
+				var pathname = window.location.pathname || '';
+				// Extract base path (e.g., /rhot) from pathname
+				var basePath = pathname.split('/').slice(0, -1).join('/') || '';
+				root = origin + basePath + '/wp-json/';
 			}
 
 			var namespace = 'jet-geometry/v1/';
@@ -625,33 +609,143 @@
 
 		setupCountrySource: function(mapId, map) {
 			var sourceId = 'jet-country-source-' + mapId;
+			console.log('[JetCountryLayers] 🏗️ setupCountrySource called:', { mapId: mapId, sourceId: sourceId, hasMap: !!map, hasData: this.hasCountriesData() });
 
 			if ( ! this.hasCountriesData() ) {
+				console.log('[JetCountryLayers] ⏳ No countries data, fetching...');
 				this.fetchCountriesData(function(success) {
+					console.log('[JetCountryLayers] 📦 fetchCountriesData callback:', { success: success, hasData: JetCountryLayers.hasCountriesData() });
 					if ( success && JetCountryLayers.hasCountriesData() ) {
 						JetCountryLayers.setupCountrySource(mapId, map);
 						// Apply toggle state after source is set up
-						var desiredState = ( typeof JetCountryLayers.pendingToggleStates[mapId] !== 'undefined' ) 
-							? JetCountryLayers.pendingToggleStates[mapId] 
+						var desiredState = ( typeof JetCountryLayers.pendingToggleStates[mapId] !== 'undefined' )
+							? JetCountryLayers.pendingToggleStates[mapId]
 							: JetCountryLayers.countryToggleState;
 						JetCountryLayers.applyToggleState(mapId, map, desiredState);
 					} else {
+						console.log('[JetCountryLayers] ❌ Failed to fetch countries data');
 					}
 				});
 				return;
 			}
 
 			var data = this.countriesData;
-			var featureCount = ( data && data.features ) ? data.features.length : 0;
+			console.log('[JetCountryLayers] 📊 Countries data:', { 
+				hasData: !!data, 
+				type: data ? data.type : 'N/A',
+				featuresCount: data && data.features ? data.features.length : 0 
+			});
+			
+			// Validate data before adding source (Safari compatibility)
+			if ( ! data || typeof data !== 'object' || ! data.features || ! Array.isArray(data.features) ) {
+				console.log('[JetCountryLayers] ❌ Invalid data structure, cannot add source');
+				// Data is not valid GeoJSON, don't add source
+				return;
+			}
+			
+			var featureCount = data.features.length;
+			console.log('[JetCountryLayers] 📊 Feature count:', featureCount);
 
+			// Ensure map is ready before adding source (Safari compatibility)
+			if ( typeof map.isStyleLoaded === 'function' && ! map.isStyleLoaded() ) {
+				console.log('[JetCountryLayers] ⏳ Map style not loaded, waiting...');
+				// Map style not loaded yet, wait for it
+				var self = this;
+				map.once('style.load', function() {
+					console.log('[JetCountryLayers] ✅ Map style.load event fired, retrying setupCountrySource');
+					self.setupCountrySource(mapId, map);
+				});
+				return;
+			}
+			
 			// Add source if not exists
 			if ( ! map.getSource(sourceId) ) {
-				map.addSource(sourceId, {
-					type: 'geojson',
-					data: data
-				});
+				console.log('[JetCountryLayers] ➕ Adding source:', sourceId);
+				try {
+					// Triple-check data is valid before adding source (Safari compatibility)
+					if ( ! data || typeof data !== 'object' || ! data.features || ! Array.isArray(data.features) || data.features.length === 0 ) {
+						console.log('[JetCountryLayers] ❌ Data validation failed, cannot add source');
+						// Data is invalid, don't add source - this prevents Mapbox from trying to load from URL
+						return;
+					}
+					
+					// Ensure data is a proper GeoJSON FeatureCollection
+					if ( data.type !== 'FeatureCollection' ) {
+						console.log('[JetCountryLayers] ❌ Invalid GeoJSON type:', data.type);
+						// Invalid GeoJSON type, don't add source
+						return;
+					}
+					
+					console.log('[JetCountryLayers] ✅ Data validated, adding source with', featureCount, 'features');
+					// Add source with inline data only (no URL) to prevent Safari from trying to load "geojson" file
+					map.addSource(sourceId, {
+						type: 'geojson',
+						data: data
+						// Explicitly no 'url' property to prevent Mapbox from trying to load from URL
+					});
+					console.log('[JetCountryLayers] ✅ Source added successfully');
+				} catch (error) {
+					console.log('[JetCountryLayers] ❌ Error adding source, retrying...', error);
+					// Safari: if addSource fails, don't retry if data is invalid
+					if ( ! data || ! data.features || ! Array.isArray(data.features) || data.features.length === 0 ) {
+						return;
+					}
+					
+					var self = this;
+					setTimeout(function() {
+						try {
+							// Triple-check data is still valid before retry
+							if ( ! map.getSource(sourceId) && data && typeof data === 'object' && data.features && Array.isArray(data.features) && data.features.length > 0 && data.type === 'FeatureCollection' ) {
+								map.addSource(sourceId, {
+									type: 'geojson',
+									data: data
+									// Explicitly no 'url' property
+								});
+							}
+						} catch (retryError) {
+							// Silent fail
+						}
+					}, 100);
+					return;
+				}
 			} else {
-				map.getSource(sourceId).setData(data);
+				console.log('[JetCountryLayers] 🔄 Source already exists, updating data');
+				try {
+					// Triple-check data is valid before updating
+					if ( ! data || typeof data !== 'object' || ! data.features || ! Array.isArray(data.features) ) {
+						console.log('[JetCountryLayers] ❌ Invalid data for update');
+						return;
+					}
+					
+					// Ensure data is a proper GeoJSON FeatureCollection
+					if ( data.type !== 'FeatureCollection' ) {
+						console.log('[JetCountryLayers] ❌ Invalid GeoJSON type for update:', data.type);
+						return;
+					}
+					
+					console.log('[JetCountryLayers] ✅ Updating source data with', featureCount, 'features');
+					map.getSource(sourceId).setData(data);
+					console.log('[JetCountryLayers] ✅ Source data updated successfully');
+				} catch (error) {
+					console.log('[JetCountryLayers] ❌ Error updating source data:', error);
+					// Safari: if setData fails, don't retry if data is invalid
+					if ( ! data || ! data.features || ! Array.isArray(data.features) ) {
+						return;
+					}
+					
+					var self = this;
+					setTimeout(function() {
+						try {
+							// Triple-check data is still valid before retry
+							if ( map.getSource(sourceId) && data && typeof data === 'object' && data.features && Array.isArray(data.features) && data.type === 'FeatureCollection' ) {
+								map.getSource(sourceId).setData(data);
+							}
+						} catch (retryError) {
+							// Silent fail
+						}
+					}, 100);
+					return;
+				}
 			}
 
 			if ( featureCount === 0 ) {
@@ -662,6 +756,8 @@
 				? this.pendingToggleStates[mapId] 
 				: this.countryToggleState;
 			
+			console.log('[JetCountryLayers] 🎯 Desired toggle state:', { desiredState: desiredState, pendingState: this.pendingToggleStates[mapId], currentState: this.countryToggleState });
+			
 			// Clear pending state after reading it
 			if ( typeof this.pendingToggleStates[mapId] !== 'undefined' ) {
 				delete this.pendingToggleStates[mapId];
@@ -670,6 +766,7 @@
 			// Apply toggle state - use a small delay to ensure source is fully ready
 			var self = this;
 			setTimeout(function() {
+				console.log('[JetCountryLayers] ⏰ Applying toggle state after delay');
 				self.applyToggleState(mapId, map, desiredState);
 			}, 50);
 		},
@@ -731,18 +828,67 @@
 				return this.countriesRequest;
 			}
 
+			// Safari: Use REST endpoint directly to avoid fetch API issues
+			var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+			
+			if ( isSafari ) {
+				// Safari has issues with fetch API for some URLs, use REST endpoint directly
+				return this.fetchCountriesDataViaRest().then(function(data) {
+					return data || self.countriesData;
+				});
+			}
+			
 			var url = JetCountryLayersData.countriesUrl;
 
 			if ( ! url ) {
 				var restUrl = this.ensureRestUrl();
 
 				if ( restUrl ) {
-					var base = restUrl.replace(/\/wp-json\/.*$/, '/').replace(/\/+$/, '/');
+					// Build base URL from REST URL - preserve subdirectory path (e.g., /rhot)
+					var base = '';
+					try {
+						// Try to extract base URL from REST URL
+						var urlObj = new URL(restUrl);
+						// Extract pathname and remove /wp-json/jet-geometry/v1/ part
+						var pathname = urlObj.pathname.replace(/\/wp-json\/.*$/, '');
+						base = urlObj.origin + pathname + '/';
+					} catch (e) {
+						// Fallback: use string replacement (Safari compatibility)
+						base = restUrl.replace(/\/wp-json\/.*$/, '/').replace(/\/+$/, '/');
+						// Ensure base is absolute URL
+						if ( base.indexOf('http') !== 0 ) {
+							// Use current page pathname to preserve subdirectory
+							var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+							var pathname = window.location.pathname || '';
+							var basePath = pathname.split('/').slice(0, -1).join('/') || '';
+							base = origin + basePath + '/';
+						}
+					}
 					url = base + 'wp-content/uploads/jet-geometry/countries.json';
 					JetCountryLayersData.countriesUrl = url;
 				} else {
 					return this.fetchCountriesDataViaRest();
 				}
+			}
+			
+			// Validate URL before using it (Safari compatibility)
+			if ( url && url.indexOf('http') !== 0 && url.indexOf('//') !== 0 ) {
+				// Relative URL - make it absolute, preserve subdirectory path
+				var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+				var pathname = window.location.pathname || '';
+				var basePath = pathname.split('/').slice(0, -1).join('/') || '';
+				url = origin + basePath + (url.charAt(0) === '/' ? '' : '/') + url.replace(/^\/+/, '');
+				JetCountryLayersData.countriesUrl = url;
+			}
+			
+			// If URL looks invalid, use REST endpoint directly
+			var urlLooksInvalid = !url || url.indexOf('countries.json') === -1 || url.length < 10;
+			
+			if ( urlLooksInvalid ) {
+				// Use REST endpoint directly for invalid URLs
+				return this.fetchCountriesDataViaRest().then(function(data) {
+					return data || self.countriesData;
+				});
 			}
 
 			if ( this.countriesAbortController ) {
@@ -769,15 +915,26 @@
 			var promise = fetch(requestUrl, options)
 				.then(function(response) {
 					if ( ! response.ok ) {
+						// Safari: if 404, try REST endpoint instead
+						if ( response.status === 404 ) {
+							throw new Error('File not found, using REST endpoint');
+						}
 						throw new Error('Failed to fetch countries JSON: ' + response.status);
 					}
 					return response.json();
 				})
 				.catch(function(error) {
-					return self.fetchCountriesDataViaRest();
+					// Safari: if fetch fails, try REST endpoint as fallback
+					// fetchCountriesDataViaRest returns a Promise that resolves with data
+					return self.fetchCountriesDataViaRest().then(function(restData) {
+						// restData is already set by setCountriesData in fetchCountriesDataViaRest
+						return restData || self.countriesData;
+					});
 				})
 				.then(function(data) {
-					self.setCountriesData(data);
+					if ( data ) {
+						self.setCountriesData(data);
+					}
 					return self.countriesData;
 				})
 				.finally(function() {
@@ -798,29 +955,65 @@
 			}
 
 			return new Promise(function(resolve) {
-				var requestUrl = restUrl + 'countries/geojson';
+				// Ensure REST URL ends with / before adding endpoint
+				var baseUrl = restUrl.replace(/\/+$/, '') + '/';
+				var requestUrl = baseUrl + 'countries/geojson';
+				
+				// Validate URL (Safari compatibility) - preserve subdirectory path
+				if ( requestUrl.indexOf('http') !== 0 && requestUrl.indexOf('//') !== 0 ) {
+					// Relative URL - make it absolute, preserve subdirectory path
+					var origin = window.location.origin || (window.location.protocol + '//' + window.location.host);
+					var pathname = window.location.pathname || '';
+					var basePath = pathname.split('/').slice(0, -1).join('/') || '';
+					requestUrl = origin + basePath + (requestUrl.charAt(0) === '/' ? '' : '/') + requestUrl.replace(/^\/+/, '');
+				}
 				
 				$.ajax({
 					url: requestUrl,
 					method: 'GET',
 					data: { simplified: true },
+					dataType: 'json',
 					beforeSend: function(xhr) {
 						if ( JetCountryLayersData.nonce ) {
 							xhr.setRequestHeader('X-WP-Nonce', JetCountryLayersData.nonce);
 						}
 					}
 				}).done(function(response) {
-					self.setCountriesData(response);
-					resolve(self.countriesData);
+					// Validate response is valid GeoJSON FeatureCollection (Safari compatibility)
+					if ( response && typeof response === 'object' && response.features && Array.isArray(response.features) ) {
+						// Ensure it's a FeatureCollection
+						if ( response.type !== 'FeatureCollection' ) {
+							// Convert to FeatureCollection if needed
+							response = {
+								type: 'FeatureCollection',
+								features: response.features || []
+							};
+						}
+						self.setCountriesData(response);
+						resolve(self.countriesData);
+					} else {
+						// Invalid response format - don't set data
+						resolve(null);
+					}
 				}).fail(function(jqXHR, textStatus, errorThrown) {
-					// Silent fail - return null
+					// Silent fail - return null (don't try to load "geojson" file)
 					resolve(null);
 				});
 			});
 		},
 
 		setCountriesData: function(data) {
-			if ( data && data.features ) {
+			// Validate data is proper GeoJSON FeatureCollection (Safari compatibility)
+			if ( data && typeof data === 'object' && data.features && Array.isArray(data.features) ) {
+				// Ensure it's a FeatureCollection
+				if ( data.type !== 'FeatureCollection' ) {
+					// Convert to FeatureCollection if needed
+					data = {
+						type: 'FeatureCollection',
+						features: data.features || []
+					};
+				}
+				
 				this.countriesData = data;
 
 				this.buildCountryIndexes(data);
@@ -1039,6 +1232,8 @@
 		toggleCountryLayers: function(show, options) {
 			var self    = this;
 			var persist = ! options || options.persist !== false;
+			
+			console.log('[JetCountryLayers] 🔄 toggleCountryLayers called:', { show: show, persist: persist, hasData: this.hasCountriesData(), mapsCount: Object.keys(this.maps || {}).length });
 
 			if ( this.forceCountryLayersVisible ) {
 				show = true;
@@ -1062,8 +1257,10 @@
 			}
 
 			if ( ! this.hasCountriesData() ) {
+				console.log('[JetCountryLayers] ⏳ No countries data, loading...');
 				this.pendingToggle = show;
 				this.fetchCountriesData(function(success) {
+					console.log('[JetCountryLayers] 📦 Countries data loaded:', success);
 					if ( success ) {
 						var desired = self.pendingToggle;
 						self.pendingToggle = null;
@@ -1077,6 +1274,7 @@
 				return;
 			}
 
+			console.log('[JetCountryLayers] ✅ Applying toggle state to', Object.keys(this.maps || {}).length, 'maps');
 			$.each(this.maps, function(mapId, mapInstance) {
 				self.applyToggleState(mapId, mapInstance.map, show);
 			});
@@ -1102,6 +1300,8 @@
 		},
 
 		applyToggleState: function(mapId, map, showCountries) {
+			console.log('[JetCountryLayers] 🎛️ applyToggleState called:', { mapId: mapId, showCountries: showCountries, hasMap: !!map });
+			
 			var context = ( this && this === window ) ? window.JetCountryLayers : this;
 
 			if ( ! context ) {
@@ -1109,6 +1309,7 @@
 			}
 
 			if ( ! context ) {
+				console.log('[JetCountryLayers] ❌ No context available');
 				return;
 			}
 
@@ -1119,6 +1320,7 @@
 			}
 
 			if ( ! targetMap || typeof targetMap.getSource !== 'function' ) {
+				console.log('[JetCountryLayers] ⏳ Target map not ready, saving pending state');
 				// Nothing to toggle yet - save state for later
 				if ( mapId ) {
 					context.pendingToggleStates[mapId] = showCountries;
@@ -1128,29 +1330,36 @@
 
 			var sourceId = 'jet-country-source-' + mapId;
 			if ( ! targetMap.getSource(sourceId) ) {
+				console.log('[JetCountryLayers] ⏳ Source not ready, saving pending state and setting up source');
 				// Source not ready yet - save state and try to setup source
 				if ( mapId ) {
 				context.pendingToggleStates[mapId] = showCountries;
 					// Try to setup source if we have data
 					if ( context.hasCountriesData() ) {
+						console.log('[JetCountryLayers] 🏗️ Setting up source...');
 						context.setupCountrySource(mapId, targetMap);
+					} else {
+						console.log('[JetCountryLayers] ⚠️ No countries data available');
 					}
 				}
 				return;
 			}
 
+			console.log('[JetCountryLayers] ✅ Source exists, applying toggle state');
 			// Source exists - clear pending state and apply
 			if ( mapId && typeof context.pendingToggleStates[mapId] !== 'undefined' ) {
 			delete context.pendingToggleStates[mapId];
 			}
 
 			if ( showCountries ) {
+				console.log('[JetCountryLayers] 👁️ Showing country layers...');
 				context.showCountryLayers(mapId, targetMap);
 				if ( mapId ) {
 					context.toggleIncidentLayersDebounced(false, mapId, targetMap);
 				}
 				context.toggleMarkerElementsDebounced(false);
 			} else {
+				console.log('[JetCountryLayers] 👁️ Hiding country layers...');
 				context.hideCountryLayers(mapId, targetMap);
 				// Always show incidents when country layers are OFF
 				// Force show incidents immediately
@@ -1190,7 +1399,10 @@
 		showCountryLayers: function(mapId, map) {
 			var self = window.JetCountryLayers || this;
 			
+			console.log('[JetCountryLayers] 🗺️ showCountryLayers called for mapId:', mapId, { hasMap: !!map, hasGetSource: !!(map && typeof map.getSource === 'function') });
+			
 			if ( ! map || typeof map.getSource !== 'function' ) {
+				console.log('[JetCountryLayers] ❌ Invalid map or getSource function');
 				return;
 			}
 			
@@ -1198,25 +1410,106 @@
 			
 			// Check if source exists, if not, setup source first
 			if ( ! map.getSource(sourceId) ) {
+				console.log('[JetCountryLayers] ⏳ Source does not exist, setting up...', { hasData: self.hasCountriesData() });
 				// Source not ready yet, setup it first
 				// But only if we have countries data, otherwise it will be set up later
 				if ( self.hasCountriesData() ) {
-				self.setupCountrySource(mapId, map);
+					self.setupCountrySource(mapId, map);
+					// Wait for source to be ready before adding layers (Safari compatibility)
+					var checkSourceReady = function(attempts) {
+						attempts = attempts || 0;
+						if ( attempts > 20 ) {
+							console.log('[JetCountryLayers] ⚠️ Source setup timeout after 20 attempts');
+							return; // Give up after 20 attempts
+						}
+						if ( map.getSource(sourceId) ) {
+							console.log('[JetCountryLayers] ✅ Source is ready after', attempts, 'attempts');
+							// Source is ready, add layers
+							setTimeout(function() {
+								self.showCountryLayers(mapId, map);
+							}, 50);
+						} else {
+							setTimeout(function() {
+								checkSourceReady(attempts + 1);
+							}, 50);
+						}
+					};
+					checkSourceReady();
 				}
 				return;
 			}
 			
-			if ( self.layersAdded[mapId] ) {
-				// Just show existing layers
-				self.setLayersVisibility(mapId, map, 'visible');
+			// Check if we have countries data - if not, wait for it
+			if ( ! self.hasCountriesData() ) {
+				console.log('[JetCountryLayers] ⏳ No countries data, waiting...');
+				// Wait for data to load
+				var checkDataReady = function(attempts) {
+					attempts = attempts || 0;
+					if ( attempts > 30 ) {
+						console.log('[JetCountryLayers] ⚠️ Data load timeout after 30 attempts');
+						return; // Give up after 30 attempts (1.5 seconds)
+					}
+					if ( self.hasCountriesData() ) {
+						console.log('[JetCountryLayers] ✅ Countries data ready after', attempts, 'attempts');
+						// Data is ready, add layers
+						setTimeout(function() {
+							self.showCountryLayers(mapId, map);
+						}, 50);
+					} else {
+						setTimeout(function() {
+							checkDataReady(attempts + 1);
+						}, 50);
+					}
+				};
+				checkDataReady();
 				return;
 			}
+			
+			if ( self.layersAdded[mapId] ) {
+				// Just show existing layers - but verify they exist first
+				var fillLayerId = 'jet-country-fill-' + mapId;
+				var outlineLayerId = 'jet-country-outline-' + mapId;
+				
+				console.log('[JetCountryLayers] 🔍 Checking existing layers:', { 
+					fillExists: !!map.getLayer(fillLayerId), 
+					outlineExists: !!map.getLayer(outlineLayerId) 
+				});
+				
+				if ( map.getLayer(fillLayerId) && map.getLayer(outlineLayerId) ) {
+					console.log('[JetCountryLayers] ✅ Layers exist, setting visibility to visible');
+					self.setLayersVisibility(mapId, map, 'visible');
+				} else {
+					console.log('[JetCountryLayers] ⚠️ Layers marked as added but don\'t exist, resetting');
+					// Layers were marked as added but don't exist - add them again
+					self.layersAdded[mapId] = false;
+					// Continue to add layers below
+				}
+			}
+			
+			// If layers are already added and visible, return
+			if ( self.layersAdded[mapId] ) {
+				console.log('[JetCountryLayers] ✅ Layers already added, returning');
+				return;
+			}
+			
+			console.log('[JetCountryLayers] 🏗️ Starting to add layers...');
 
 			var fillLayerId = 'jet-country-fill-' + mapId;
 			var outlineLayerId = 'jet-country-outline-' + mapId;
 
-			var baseFillColor = self.normalizeColor( self.noIncidentColor || JetCountryLayersData.noIncidentColor || '#3b82f6' );
-			var incidentFillColor = self.normalizeColor( self.incidentColor || JetCountryLayersData.incidentColor || '#ef4444' );
+			// Use data from JetCountryLayersData first, then fallback to defaults
+			var noIncidentColorValue = JetCountryLayersData.noIncidentColor || self.noIncidentColor || '#3b82f6';
+			var incidentColorValue = JetCountryLayersData.incidentColor || self.incidentColor || '#ef4444';
+			
+			console.log('[JetCountryLayers] 🎨 Color values:', {
+				noIncidentColorValue: noIncidentColorValue,
+				incidentColorValue: incidentColorValue,
+				JetCountryLayersData_noIncidentColor: JetCountryLayersData.noIncidentColor,
+				self_noIncidentColor: self.noIncidentColor
+			});
+			
+			var baseFillColor = self.normalizeColor( noIncidentColorValue );
+			var incidentFillColor = self.normalizeColor( incidentColorValue );
 			var baseBorderColor = self.normalizeColor( self.noIncidentBorderColor || self.noIncidentColor || baseFillColor );
 			var incidentBorderColor = self.normalizeColor( self.incidentBorderColor || self.incidentColor || incidentFillColor );
 			var noIncidentBorderWidth = parseFloat( self.noIncidentBorderWidth );
@@ -1246,24 +1539,55 @@
 			}
 			
 			// Wyrażenie Mapbox dla dynamicznej opacity
-			var fillOpacityExpression = [
-				'case',
-				// Jeśli incident_count = 0, użyj minimalnej opacity
-				['==', ['coalesce', ['get', 'incident_count'], 0], 0],
-				minOpacity,
-				// W przeciwnym razie użyj interpolacji liniowej
-				[
-					'interpolate',
-					['linear'],
-					['coalesce', ['get', 'incident_count'], 0],
-					0,   minOpacity,           // 0 incydentów = minOpacity
-					1,   minOpacity + (maxOpacity - minOpacity) * 0.25,  // 1 incydent = 25% skali
-					5,   minOpacity + (maxOpacity - minOpacity) * 0.5,   // 5 incydentów = 50% skali
-					10,  minOpacity + (maxOpacity - minOpacity) * 0.75,  // 10 incydentów = 75% skali
-					20,  minOpacity + (maxOpacity - minOpacity) * 0.9,   // 20 incydentów = 90% skali
-					maxIncidents, maxOpacity   // maxIncidents+ = maxOpacity
-				]
-			];
+			// Safari: Use simpler 'case' expression instead of nested 'interpolate' (Safari doesn't support nested interpolate well)
+			var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+			var fillOpacityExpression;
+			
+			if ( isSafari ) {
+				// Safari: Use simpler 'case' expression with ranges instead of 'interpolate'
+				var opacityStep = (maxOpacity - minOpacity) / 5; // Divide into 5 steps
+				fillOpacityExpression = [
+					'case',
+					// Jeśli incident_count = 0, użyj minimalnej opacity
+					['==', ['coalesce', ['get', 'incident_count'], 0], 0],
+					minOpacity,
+					// 1-2 incydentów = 25% skali
+					['<=', ['coalesce', ['get', 'incident_count'], 0], 2],
+					minOpacity + opacityStep * 1.25,
+					// 3-5 incydentów = 50% skali
+					['<=', ['coalesce', ['get', 'incident_count'], 0], 5],
+					minOpacity + opacityStep * 2.5,
+					// 6-10 incydentów = 75% skali
+					['<=', ['coalesce', ['get', 'incident_count'], 0], 10],
+					minOpacity + opacityStep * 3.75,
+					// 11-20 incydentów = 90% skali
+					['<=', ['coalesce', ['get', 'incident_count'], 0], 20],
+					minOpacity + opacityStep * 4.5,
+					// maxIncidents+ = maxOpacity
+					maxOpacity
+				];
+				console.log('[JetCountryLayers] 🍎 Safari: Using simpler case expression for opacity');
+			} else {
+				// Chrome/Firefox: Use interpolate for smooth gradient
+				fillOpacityExpression = [
+					'case',
+					// Jeśli incident_count = 0, użyj minimalnej opacity
+					['==', ['coalesce', ['get', 'incident_count'], 0], 0],
+					minOpacity,
+					// W przeciwnym razie użyj interpolacji liniowej
+					[
+						'interpolate',
+						['linear'],
+						['coalesce', ['get', 'incident_count'], 0],
+						0,   minOpacity,           // 0 incydentów = minOpacity
+						1,   minOpacity + (maxOpacity - minOpacity) * 0.25,  // 1 incydent = 25% skali
+						5,   minOpacity + (maxOpacity - minOpacity) * 0.5,   // 5 incydentów = 50% skali
+						10,  minOpacity + (maxOpacity - minOpacity) * 0.75,  // 10 incydentów = 75% skali
+						20,  minOpacity + (maxOpacity - minOpacity) * 0.9,   // 20 incydentów = 90% skali
+						maxIncidents, maxOpacity   // maxIncidents+ = maxOpacity
+					]
+				];
+			}
 
 			var fillColorExpression = [
 				'case',
@@ -1286,72 +1610,471 @@
 				noIncidentBorderWidth
 			];
 
-			// Add fill layer
-			if ( ! map.getLayer(fillLayerId) ) {
-				map.addLayer({
-					id: fillLayerId,
-					type: 'fill',
-					source: sourceId,
-					paint: {
-						'fill-color': fillColorExpression,
-						'fill-opacity': fillOpacityExpression
-					},
-					layout: {
-						'visibility': 'visible'
-					}
-				});
+			// Safari-specific: More aggressive checking for map readiness
+			// Note: isSafari is already defined above when creating fillOpacityExpression
+			console.log('[JetCountryLayers] 🌐 Browser detection:', { isSafari: isSafari, userAgent: navigator.userAgent, fillOpacityExpression: JSON.stringify(fillOpacityExpression) });
+			
+			// Safari: Verify source has data before adding layers
+			if ( isSafari ) {
 				try {
-					map.moveLayer(fillLayerId);
+					var source = map.getSource(sourceId);
+					console.log('[JetCountryLayers] 🔍 Safari: Checking source:', { sourceExists: !!source });
+					if ( ! source ) {
+						console.log('[JetCountryLayers] ⏳ Safari: Source doesn\'t exist, waiting...');
+						// Source doesn't exist, wait for it
+						var self = this;
+						setTimeout(function() {
+							self.showCountryLayers(mapId, map);
+						}, 100);
+						return;
+					}
+					
+					// Safari: Check if source is ready by trying to get data
+					// This helps ensure Safari can render the layers
+					var sourceReady = false;
+					try {
+						// Try to access source data to verify it's ready
+						var sourceData = source._data || (typeof source.getData === 'function' ? source.getData() : null);
+						sourceReady = !!sourceData;
+						console.log('[JetCountryLayers] 🔍 Safari: Source data check:', { sourceReady: sourceReady, hasData: !!sourceData });
+					} catch (error) {
+						// Source might not expose data directly, assume ready
+						sourceReady = true;
+						console.log('[JetCountryLayers] ⚠️ Safari: Source data check error, assuming ready:', error);
+					}
+					
+					if ( ! sourceReady ) {
+						console.log('[JetCountryLayers] ⏳ Safari: Source not ready, waiting...');
+						// Wait a bit for source to be ready
+						var self = this;
+						setTimeout(function() {
+							self.showCountryLayers(mapId, map);
+						}, 150);
+						return;
+					}
 				} catch (error) {
+					console.log('[JetCountryLayers] ⚠️ Safari: Error checking source, continuing:', error);
+					// Error checking source, continue anyway
+				}
+			}
+			
+			var isMapReady = false;
+			
+			if ( typeof map.isStyleLoaded === 'function' ) {
+				isMapReady = map.isStyleLoaded();
+			} else if ( typeof map.loaded === 'function' ) {
+				isMapReady = map.loaded();
+			} else {
+				isMapReady = true; // Assume ready if methods don't exist
+			}
+			
+			// Safari: Also check if map style is loaded
+			if ( isSafari && isMapReady ) {
+				try {
+					var style = map.getStyle();
+					if ( ! style || ! style.layers ) {
+						isMapReady = false;
+					}
+					console.log('[JetCountryLayers] 🔍 Safari: Map style check:', { isMapReady: isMapReady, hasStyle: !!style, layersCount: style && style.layers ? style.layers.length : 0 });
+				} catch (error) {
+					isMapReady = false;
+					console.log('[JetCountryLayers] ⚠️ Safari: Map style check error:', error);
+				}
+			}
+			
+			console.log('[JetCountryLayers] 🔍 Map readiness:', { isMapReady: isMapReady, isStyleLoaded: typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : 'N/A', loaded: typeof map.loaded === 'function' ? map.loaded() : 'N/A' });
+			
+			if ( ! isMapReady ) {
+				console.log('[JetCountryLayers] ⏳ Map not ready, waiting...');
+				// Map not ready, wait for it (longer delay for Safari)
+				var self = this;
+				var delay = isSafari ? 150 : 100;
+				
+				if ( typeof map.once === 'function' ) {
+					map.once('style.load', function() {
+						console.log('[JetCountryLayers] ✅ Map style.load event fired');
+						setTimeout(function() {
+							self.showCountryLayers(mapId, map);
+						}, delay);
+					});
+					map.once('load', function() {
+						console.log('[JetCountryLayers] ✅ Map load event fired');
+						setTimeout(function() {
+							self.showCountryLayers(mapId, map);
+						}, delay);
+					});
+				} else {
+					setTimeout(function() {
+						self.showCountryLayers(mapId, map);
+					}, delay);
+				}
+				return;
+			}
+			
+			// Add fill layer - don't set visibility in layout (like addSelectedCountryLayers does)
+			// Safari renders layers better when visibility is set via setLayoutProperty after adding
+			if ( ! map.getLayer(fillLayerId) ) {
+				try {
+					map.addLayer({
+						id: fillLayerId,
+						type: 'fill',
+						source: sourceId,
+						paint: {
+							'fill-color': fillColorExpression,
+							'fill-opacity': fillOpacityExpression
+						}
+						// Don't set visibility in layout - let it default to 'visible'
+					});
+					try {
+						map.moveLayer(fillLayerId);
+					} catch (error) {
+						// Silent fail
+					}
+					
+					// Safari: Explicitly set visibility after adding (like addSelectedCountryLayers does)
+					if ( isSafari ) {
+						var self = this;
+						setTimeout(function() {
+							try {
+								if ( map.getLayer(fillLayerId) ) {
+									map.setLayoutProperty(fillLayerId, 'visibility', 'visible');
+								}
+							} catch (error) {
+								// Silent fail
+							}
+						}, 100);
+					}
+				} catch (error) {
+					// Safari: if addLayer fails, try again after a delay
+					var self = this;
+					setTimeout(function() {
+						try {
+							if ( ! map.getLayer(fillLayerId) && map.getSource(sourceId) ) {
+								map.addLayer({
+									id: fillLayerId,
+									type: 'fill',
+									source: sourceId,
+									paint: {
+										'fill-color': fillColorExpression,
+										'fill-opacity': fillOpacityExpression
+									}
+								});
+								if ( isSafari ) {
+									setTimeout(function() {
+										try {
+											if ( map.getLayer(fillLayerId) ) {
+												map.setLayoutProperty(fillLayerId, 'visibility', 'visible');
+											}
+										} catch (error) {}
+									}, 100);
+								}
+							}
+						} catch (retryError) {}
+					}, 100);
 				}
 			}
 
 			if ( map.getLayer(fillLayerId) ) {
 				try {
+					console.log('[JetCountryLayers] 🎨 Setting fill paint properties:', {
+						fillColorExpression: JSON.stringify(fillColorExpression),
+						fillOpacityExpression: JSON.stringify(fillOpacityExpression),
+						baseFillColor: baseFillColor,
+						incidentFillColor: incidentFillColor,
+						minOpacity: minOpacity,
+						maxOpacity: maxOpacity,
+						isSafari: isSafari
+					});
 					map.setPaintProperty(fillLayerId, 'fill-color', fillColorExpression);
 					map.setPaintProperty(fillLayerId, 'fill-opacity', fillOpacityExpression);
-					map.setLayoutProperty(fillLayerId, 'visibility', 'visible');
+					
+					// Safari: Verify paint properties were set correctly
+					if ( isSafari ) {
+						setTimeout(function() {
+							try {
+								var currentFillColor = map.getPaintProperty(fillLayerId, 'fill-color');
+								var currentFillOpacity = map.getPaintProperty(fillLayerId, 'fill-opacity');
+								console.log('[JetCountryLayers] 🔍 Safari: Current paint properties:', {
+									fillColor: JSON.stringify(currentFillColor),
+									fillOpacity: JSON.stringify(currentFillOpacity),
+									expectedOpacityExpression: JSON.stringify(fillOpacityExpression)
+								});
+							} catch (error) {
+								console.log('[JetCountryLayers] ⚠️ Safari: Error checking paint properties:', error);
+							}
+						}, 100);
+					}
+					
+					console.log('[JetCountryLayers] ✅ Fill layer paint properties updated');
 				} catch (error) {
+					console.log('[JetCountryLayers] ⚠️ Error updating fill layer paint properties:', error);
 				}
 			}
 
-			// Add outline layer
+			// Add outline layer - same approach as addSelectedCountryLayers
 			if ( ! map.getLayer(outlineLayerId) ) {
-				map.addLayer({
-					id: outlineLayerId,
-					type: 'line',
-					source: sourceId,
-					paint: {
-						'line-color': outlineColorExpression,
-						'line-width': outlineWidthExpression,
-						'line-opacity': 0.8
-					}
-				});
+				console.log('[JetCountryLayers] ➕ Adding outline layer:', outlineLayerId);
 				try {
-					map.moveLayer(outlineLayerId);
+					map.addLayer({
+						id: outlineLayerId,
+						type: 'line',
+						source: sourceId,
+						paint: {
+							'line-color': outlineColorExpression,
+							'line-width': outlineWidthExpression,
+							'line-opacity': 0.8
+						}
+					});
+					console.log('[JetCountryLayers] ✅ Outline layer added successfully');
+					try {
+						map.moveLayer(outlineLayerId);
+						console.log('[JetCountryLayers] ✅ Outline layer moved to top');
+					} catch (error) {
+						console.log('[JetCountryLayers] ⚠️ Error moving outline layer:', error);
+					}
+					
+					// Safari: Explicitly set visibility after adding (like addSelectedCountryLayers does)
+					if ( isSafari ) {
+						var self = this;
+						setTimeout(function() {
+							try {
+								if ( map.getLayer(outlineLayerId) ) {
+									console.log('[JetCountryLayers] 🔍 Safari: Setting outline layer visibility to visible');
+									map.setLayoutProperty(outlineLayerId, 'visibility', 'visible');
+									var currentVis = map.getLayoutProperty(outlineLayerId, 'visibility');
+									console.log('[JetCountryLayers] ✅ Safari: Outline layer visibility set to:', currentVis);
+								} else {
+									console.log('[JetCountryLayers] ⚠️ Safari: Outline layer does not exist when setting visibility');
+								}
+							} catch (error) {
+								console.log('[JetCountryLayers] ❌ Safari: Error setting outline layer visibility:', error);
+							}
+						}, 100);
+					}
 				} catch (error) {
+					console.log('[JetCountryLayers] ❌ Error adding outline layer, retrying...', error);
+					// Safari: if addLayer fails, try again after a delay
+					var self = this;
+					setTimeout(function() {
+						try {
+							if ( ! map.getLayer(outlineLayerId) && map.getSource(sourceId) ) {
+								console.log('[JetCountryLayers] 🔄 Retrying outline layer addition...');
+								map.addLayer({
+									id: outlineLayerId,
+									type: 'line',
+									source: sourceId,
+									paint: {
+										'line-color': outlineColorExpression,
+										'line-width': outlineWidthExpression,
+										'line-opacity': 0.8
+									}
+								});
+								console.log('[JetCountryLayers] ✅ Outline layer added on retry');
+								if ( isSafari ) {
+									setTimeout(function() {
+										try {
+											if ( map.getLayer(outlineLayerId) ) {
+												map.setLayoutProperty(outlineLayerId, 'visibility', 'visible');
+												console.log('[JetCountryLayers] ✅ Safari: Outline layer visibility set on retry');
+											}
+										} catch (error) {
+											console.log('[JetCountryLayers] ❌ Safari: Error setting outline layer visibility on retry:', error);
+										}
+									}, 100);
+								}
+							}
+						} catch (retryError) {
+							console.log('[JetCountryLayers] ❌ Error on retry:', retryError);
+						}
+					}, 100);
 				}
+			} else {
+				console.log('[JetCountryLayers] ℹ️ Outline layer already exists:', outlineLayerId);
 			}
 
 			if ( map.getLayer(outlineLayerId) ) {
 				try {
 					map.setPaintProperty(outlineLayerId, 'line-color', outlineColorExpression);
 					map.setPaintProperty(outlineLayerId, 'line-width', outlineWidthExpression);
-					map.setLayoutProperty(outlineLayerId, 'visibility', 'visible');
+					console.log('[JetCountryLayers] ✅ Outline layer paint properties updated');
 				} catch (error) {
+					console.log('[JetCountryLayers] ⚠️ Error updating outline layer paint properties:', error);
 				}
 			}
 
 			self.layersAdded[mapId] = true;
+			
+			// Safari: Force visibility to 'visible' if it's undefined (Safari returns undefined for default visibility)
+			var finalFillVis = map.getLayer(fillLayerId) ? map.getLayoutProperty(fillLayerId, 'visibility') : null;
+			var finalOutlineVis = map.getLayer(outlineLayerId) ? map.getLayoutProperty(outlineLayerId, 'visibility') : null;
+			
+			if ( isSafari ) {
+				// Safari: If visibility is undefined, explicitly set it to 'visible'
+				if ( finalFillVis === undefined || finalFillVis === null ) {
+					try {
+						map.setLayoutProperty(fillLayerId, 'visibility', 'visible');
+						finalFillVis = 'visible';
+						console.log('[JetCountryLayers] 🔧 Safari: Forced fill layer visibility to visible (was undefined)');
+					} catch (error) {
+						console.log('[JetCountryLayers] ❌ Safari: Error forcing fill visibility:', error);
+					}
+				}
+				if ( finalOutlineVis === undefined || finalOutlineVis === null ) {
+					try {
+						map.setLayoutProperty(outlineLayerId, 'visibility', 'visible');
+						finalOutlineVis = 'visible';
+						console.log('[JetCountryLayers] 🔧 Safari: Forced outline layer visibility to visible (was undefined)');
+					} catch (error) {
+						console.log('[JetCountryLayers] ❌ Safari: Error forcing outline visibility:', error);
+					}
+				}
+			}
+			
+			console.log('[JetCountryLayers] ✅ Layers marked as added. Final status:', {
+				fillLayerExists: !!map.getLayer(fillLayerId),
+				outlineLayerExists: !!map.getLayer(outlineLayerId),
+				fillVisibility: finalFillVis,
+				outlineVisibility: finalOutlineVis,
+				fillLayerId: fillLayerId,
+				outlineLayerId: outlineLayerId
+			});
+			
+			// Safari: Also check layer order - ensure layers are on top
+			if ( isSafari ) {
+				try {
+					var style = map.getStyle();
+					if ( style && style.layers ) {
+						var fillIndex = -1;
+						var outlineIndex = -1;
+						style.layers.forEach(function(layer, index) {
+							if ( layer.id === fillLayerId ) {
+								fillIndex = index;
+							}
+							if ( layer.id === outlineLayerId ) {
+								outlineIndex = index;
+							}
+						});
+						console.log('[JetCountryLayers] 📊 Layer order:', { 
+							totalLayers: style.layers.length, 
+							fillIndex: fillIndex, 
+							outlineIndex: outlineIndex,
+							fillOnTop: fillIndex >= style.layers.length - 10,
+							outlineOnTop: outlineIndex >= style.layers.length - 10
+						});
+						
+						// Try to move layers to top if they're not already there
+						if ( fillIndex >= 0 && fillIndex < style.layers.length - 5 ) {
+							try {
+								map.moveLayer(fillLayerId);
+								console.log('[JetCountryLayers] 🔝 Moved fill layer to top');
+							} catch (error) {
+								console.log('[JetCountryLayers] ⚠️ Error moving fill layer:', error);
+							}
+						}
+						if ( outlineIndex >= 0 && outlineIndex < style.layers.length - 5 ) {
+							try {
+								map.moveLayer(outlineLayerId);
+								console.log('[JetCountryLayers] 🔝 Moved outline layer to top');
+							} catch (error) {
+								console.log('[JetCountryLayers] ⚠️ Error moving outline layer:', error);
+							}
+						}
+					}
+				} catch (error) {
+					console.log('[JetCountryLayers] ⚠️ Error checking layer order:', error);
+				}
+			}
+
+			// Safari: Force layers to top and ensure visibility is set
+			if ( isSafari ) {
+				setTimeout(function() {
+					try {
+						// Move layers to absolute top
+						if ( map.getLayer(fillLayerId) ) {
+							map.moveLayer(fillLayerId);
+							console.log('[JetCountryLayers] 🔝 Safari: Moved fill layer to top');
+						}
+						if ( map.getLayer(outlineLayerId) ) {
+							map.moveLayer(outlineLayerId);
+							console.log('[JetCountryLayers] 🔝 Safari: Moved outline layer to top');
+						}
+						
+						// Force visibility one more time
+						if ( map.getLayer(fillLayerId) ) {
+							var fillVis = map.getLayoutProperty(fillLayerId, 'visibility');
+							if ( fillVis === undefined || fillVis === null || fillVis === 'none' ) {
+								map.setLayoutProperty(fillLayerId, 'visibility', 'visible');
+								console.log('[JetCountryLayers] 🔧 Safari: Final force fill visibility to visible');
+							}
+						}
+						if ( map.getLayer(outlineLayerId) ) {
+							var outlineVis = map.getLayoutProperty(outlineLayerId, 'visibility');
+							if ( outlineVis === undefined || outlineVis === null || outlineVis === 'none' ) {
+								map.setLayoutProperty(outlineLayerId, 'visibility', 'visible');
+								console.log('[JetCountryLayers] 🔧 Safari: Final force outline visibility to visible');
+							}
+						}
+						
+						// Trigger map repaint
+						try {
+							if ( typeof map.triggerRepaint === 'function' ) {
+								map.triggerRepaint();
+								console.log('[JetCountryLayers] 🎨 Safari: Triggered map repaint');
+							}
+						} catch (error) {
+							console.log('[JetCountryLayers] ⚠️ Safari: Error triggering repaint:', error);
+						}
+					} catch (error) {
+						console.log('[JetCountryLayers] ❌ Safari: Error in final layer setup:', error);
+					}
+				}, 200);
+			}
 
 			// Setup click handlers
 			self.setupCountryClickHandlers(mapId, map, fillLayerId);
 
 			// Setup hover effect
 			self.setupHoverEffect(map, fillLayerId);
+			
+			// Add fill layer - don't set visibility in layout (like addSelectedCountryLayers does)
+			// Safari renders layers better when visibility is set via setLayoutProperty after adding
+			if ( ! map.getLayer(fillLayerId) ) {
+				try {
+					map.addLayer({
+						id: fillLayerId,
+						type: 'fill',
+						source: sourceId,
+						paint: {
+							'fill-color': fillColorExpression,
+							'fill-opacity': fillOpacityExpression
+						}
+						// Don't set visibility in layout - let it default to 'visible'
+					});
+					try {
+						map.moveLayer(fillLayerId);
+					} catch (error) {
+						// Silent fail
+					}
+					
+					// Safari: Explicitly set visibility after adding (like addSelectedCountryLayers does)
+					if ( isSafari ) {
+						var self = this;
+						setTimeout(function() {
+							try {
+								if ( map.getLayer(fillLayerId) ) {
+									map.setLayoutProperty(fillLayerId, 'visibility', 'visible');
+								}
+							} catch (error) {
+								// Silent fail
+							}
+						}, 100);
+					}
+				} catch (error) {}
+			}
 		},
 
 		hideCountryLayers: function(mapId, map) {
+			console.log('[JetCountryLayers] 👁️ hideCountryLayers called:', { mapId: mapId, hasMap: !!map });
 			var self = window.JetCountryLayers || this;
 			self.setLayersVisibility(mapId, map, 'none');
 		},
@@ -2007,24 +2730,144 @@
 		},
 
 		setLayersVisibility: function(mapId, map, visibility) {
+			console.log('[JetCountryLayers] 👁️ setLayersVisibility called:', { mapId: mapId, visibility: visibility, hasMap: !!map, hasGetLayer: !!(map && typeof map.getLayer === 'function') });
+			
 			if ( ! map || typeof map.getLayer !== 'function' ) {
+				console.log('[JetCountryLayers] ❌ Invalid map or getLayer function');
 				return;
 			}
 			
+			var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 			var fillLayerId = 'jet-country-fill-' + mapId;
 			var outlineLayerId = 'jet-country-outline-' + mapId;
-
-			if ( map.getLayer(fillLayerId) ) {
+			var self = this;
+			
+			console.log('[JetCountryLayers] 🔍 Layer IDs:', { fillLayerId: fillLayerId, outlineLayerId: outlineLayerId, fillExists: !!map.getLayer(fillLayerId), outlineExists: !!map.getLayer(outlineLayerId) });
+			
+			// Safari-specific: More aggressive checking and retries
+			var setVisibilityForLayer = function(layerId, attempts) {
+				attempts = attempts || 0;
+				
+				console.log('[JetCountryLayers] 🔄 setVisibilityForLayer:', { layerId: layerId, attempts: attempts, visibility: visibility });
+				
+				if ( attempts > 10 ) {
+					console.log('[JetCountryLayers] ⚠️ Giving up after 10 attempts for layer:', layerId);
+					return; // Give up after 10 attempts
+				}
+				
+				if ( ! map.getLayer(layerId) ) {
+					console.log('[JetCountryLayers] ⏳ Layer does not exist yet, waiting...', layerId);
+					// Layer doesn't exist yet, wait a bit
+					setTimeout(function() {
+						setVisibilityForLayer(layerId, attempts + 1);
+					}, isSafari ? 100 : 50);
+					return;
+				}
+				
+				// Check if map is ready (Safari compatibility)
+				var isMapReady = false;
+				if ( typeof map.isStyleLoaded === 'function' ) {
+					isMapReady = map.isStyleLoaded();
+				} else if ( typeof map.loaded === 'function' ) {
+					isMapReady = map.loaded();
+				} else {
+					isMapReady = true; // Assume ready
+				}
+				
+				console.log('[JetCountryLayers] 🔍 Map readiness check:', { isMapReady: isMapReady, isSafari: isSafari });
+				
+				if ( ! isMapReady && isSafari ) {
+					console.log('[JetCountryLayers] ⏳ Safari: Map not ready, waiting...');
+					// Safari: Wait for map to be ready
+					if ( typeof map.once === 'function' ) {
+						map.once('style.load', function() {
+							console.log('[JetCountryLayers] ✅ Safari: style.load event fired, retrying');
+							setVisibilityForLayer(layerId, 0);
+						});
+						map.once('load', function() {
+							console.log('[JetCountryLayers] ✅ Safari: load event fired, retrying');
+							setVisibilityForLayer(layerId, 0);
+						});
+					} else {
+						setTimeout(function() {
+							setVisibilityForLayer(layerId, attempts + 1);
+						}, 100);
+					}
+					return;
+				}
+				
+				// Try to set visibility
 				try {
-					map.setLayoutProperty(fillLayerId, 'visibility', visibility);
-				} catch (error) {}
-			}
-
-			if ( map.getLayer(outlineLayerId) ) {
-				try {
-					map.setLayoutProperty(outlineLayerId, 'visibility', visibility);
-				} catch (error) {}
-			}
+					console.log('[JetCountryLayers] 🔧 Setting visibility for layer:', layerId, 'to', visibility);
+					map.setLayoutProperty(layerId, 'visibility', visibility);
+					var currentVis = map.getLayoutProperty(layerId, 'visibility');
+					console.log('[JetCountryLayers] ✅ Visibility set. Current visibility:', currentVis, 'Expected:', visibility);
+					
+					// Safari: Handle undefined visibility (Safari returns undefined for default 'visible')
+					if ( isSafari && visibility === 'visible' && (currentVis === undefined || currentVis === null) ) {
+						console.log('[JetCountryLayers] 🔧 Safari: Visibility is undefined, treating as visible');
+						currentVis = 'visible';
+					}
+					
+					// Safari: Verify it was set correctly
+					if ( isSafari ) {
+						setTimeout(function() {
+							try {
+								var currentVisibility = map.getLayoutProperty(layerId, 'visibility');
+								// Safari: Treat undefined as 'visible' for comparison
+								var effectiveCurrent = (currentVisibility === undefined || currentVisibility === null) ? 'visible' : currentVisibility;
+								var effectiveExpected = visibility === 'visible' ? 'visible' : visibility;
+								
+								console.log('[JetCountryLayers] 🔍 Safari: Verifying visibility:', { 
+									current: currentVisibility, 
+									effectiveCurrent: effectiveCurrent,
+									expected: visibility, 
+									match: effectiveCurrent === effectiveExpected 
+								});
+								
+								if ( effectiveCurrent !== effectiveExpected ) {
+									console.log('[JetCountryLayers] ⚠️ Safari: Visibility mismatch, retrying...');
+									// Not set correctly, try again
+									map.setLayoutProperty(layerId, 'visibility', visibility);
+									var retryVis = map.getLayoutProperty(layerId, 'visibility');
+									console.log('[JetCountryLayers] 🔄 Safari: After retry:', retryVis);
+									
+									// Safari: Force one more time if still not matching
+									setTimeout(function() {
+										try {
+											var finalVis = map.getLayoutProperty(layerId, 'visibility');
+											if ( (finalVis === undefined || finalVis === null) && visibility === 'visible' ) {
+												// Safari returns undefined for visible, that's OK
+												console.log('[JetCountryLayers] ✅ Safari: Visibility is undefined (default visible), OK');
+											} else if ( finalVis !== visibility ) {
+												map.setLayoutProperty(layerId, 'visibility', visibility);
+												console.log('[JetCountryLayers] 🔧 Safari: Final force set visibility');
+											}
+										} catch (finalError) {
+											console.log('[JetCountryLayers] ❌ Safari: Final visibility check error:', finalError);
+										}
+									}, 100);
+								} else {
+									console.log('[JetCountryLayers] ✅ Safari: Visibility verified correctly');
+								}
+							} catch (verifyError) {
+								console.log('[JetCountryLayers] ❌ Safari: Error verifying visibility:', verifyError);
+							}
+						}, 50);
+					}
+				} catch (error) {
+					console.log('[JetCountryLayers] ❌ Error setting visibility, retrying...', error);
+					// Safari fallback: try again after a delay
+					setTimeout(function() {
+						setVisibilityForLayer(layerId, attempts + 1);
+					}, isSafari ? 100 : 50);
+				}
+			};
+			
+			// Set visibility for both layers
+			console.log('[JetCountryLayers] 🚀 Starting visibility setting for both layers');
+			setVisibilityForLayer(fillLayerId, 0);
+			setVisibilityForLayer(outlineLayerId, 0);
 		},
 
 		setupHoverEffect: function(map, layerId) {

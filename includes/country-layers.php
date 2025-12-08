@@ -140,7 +140,7 @@ class Jet_Country_Layers {
 				'fillOpacity'      => floatval( get_option( 'jet_geometry_country_opacity', 0.3 ) ),
 				'taxonomy'         => 'countries',
 				'incidentColor'    => get_option( 'jet_geometry_country_incident_color', '#ef4444' ),
-				'noIncidentColor'  => '#3b82f6',
+				'noIncidentColor'  => get_option( 'jet_geometry_country_no_incident_color', '#3b82f6' ),
 				'incidentBorderColor'   => get_option( 'jet_geometry_country_incident_border_color', '#ef4444' ),
 				'noIncidentBorderColor' => get_option( 'jet_geometry_country_no_incident_border_color', '#3b82f6' ),
 				'incidentBorderWidth'   => floatval( get_option( 'jet_geometry_country_incident_border_width', 2 ) ),

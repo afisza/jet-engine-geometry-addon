@@ -63,6 +63,7 @@
 	padding: 0;
 	pointer-events: auto; /* Ensure checkbox can receive events */
 	-webkit-appearance: none;
+	-moz-appearance: none; /* Firefox compatibility */
 	appearance: none;
 }
 
@@ -375,6 +376,13 @@
 }
 
 /* Custom scrollbar for popup body */
+/* Firefox scrollbar styling */
+.jet-country-popup__body {
+	scrollbar-width: thin;
+	scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.1);
+}
+
+/* WebKit (Chrome/Safari) scrollbar styling */
 .jet-country-popup__body::-webkit-scrollbar {
 	width: 6px;
 }
@@ -414,7 +422,8 @@
 	height: 28px;
 	background: rgba(255, 255, 255, 0.12) !important;
 	backdrop-filter: blur(10px);
-	-webkit-backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px); /* Safari/Chrome */
+	-moz-backdrop-filter: blur(10px); /* Firefox */
 	border-radius: 14px;
 	border: 0.5px solid rgba(255, 255, 255, 0.18);
 	color: rgba(255, 255, 255, 0.85);
