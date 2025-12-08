@@ -4,7 +4,7 @@ Tags: jetengine, maps, geometry, mapbox, geojson
 Requires at least: 6.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.3.6
+Stable tag: 1.0.3.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,11 @@ Yes, the plugin integrates with JetEngine's existing page builder integrations.
 5. Drawing interface in action
 
 == Changelog ==
+
+= 1.0.3.7 =
+* Added "Check for updates" link in plugin action links for manual update checking
+* Improved update check functionality with cache clearing
+* Added success notice after manual update check
 
 = 1.0.3.6 =
 * Fixed "Show Country Layers" toggle not working on mobile devices (iPhone/iOS)

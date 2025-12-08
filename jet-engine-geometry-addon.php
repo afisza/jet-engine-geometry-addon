@@ -3,7 +3,7 @@
  * Plugin Name: JetEngine Geometry Addon
  * Plugin URI: https://yourwebsite.com/jet-engine-geometry-addon
  * Description: Extends JetEngine Maps Listing with Line and Polygon geometry support, plus country layers integration with Mapbox API
- * Version: 1.0.3.6
+ * Version: 1.0.3.7
  * Author: Alex Shram
  * Author URI: https://afisza.com
  * Text Domain: jet-geometry-addon
@@ -22,7 +22,7 @@ if ( ! defined( 'WPINC' ) ) {
 /**
  * Currently plugin version.
  */
-define( 'JET_GEOMETRY_ADDON_VERSION', '1.0.3.6' );
+define( 'JET_GEOMETRY_ADDON_VERSION', '1.0.3.7' );
 define( 'JET_GEOMETRY_ADDON_FILE', __FILE__ );
 define( 'JET_GEOMETRY_ADDON_PATH', plugin_dir_path( __FILE__ ) );
 define( 'JET_GEOMETRY_ADDON_URL', plugin_dir_url( __FILE__ ) );
@@ -193,6 +193,12 @@ class Jet_Engine_Geometry_Addon {
 
 		// Add settings link on plugins page
 		add_filter( 'plugin_action_links_' . plugin_basename( JET_GEOMETRY_ADDON_FILE ), array( $this, 'add_plugin_action_links' ) );
+		
+		// Handle manual update check
+		add_action( 'admin_post_jet_geometry_check_updates', array( $this, 'handle_manual_update_check' ) );
+		
+		// Show update check notice
+		add_action( 'admin_notices', array( $this, 'show_update_check_notice' ) );
 	}
 	
 	/**
@@ -424,9 +430,75 @@ class Jet_Engine_Geometry_Addon {
 			__( 'Settings', 'jet-geometry-addon' )
 		);
 
-		array_unshift( $links, $settings_link );
+		$check_updates_link = sprintf(
+			'<a href="%s">%s</a>',
+			wp_nonce_url(
+				admin_url( 'admin-post.php?action=jet_geometry_check_updates' ),
+				'jet_geometry_check_updates',
+				'nonce'
+			),
+			__( 'Check for updates', 'jet-geometry-addon' )
+		);
+
+		array_unshift( $links, $settings_link, $check_updates_link );
 
 		return $links;
+	}
+
+	/**
+	 * Handle manual update check
+	 */
+	public function handle_manual_update_check() {
+		// Verify nonce
+		if ( ! isset( $_GET['nonce'] ) || ! wp_verify_nonce( $_GET['nonce'], 'jet_geometry_check_updates' ) ) {
+			wp_die( __( 'Security check failed', 'jet-geometry-addon' ) );
+		}
+
+		// Check user capabilities
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			wp_die( __( 'You do not have permission to update plugins.', 'jet-geometry-addon' ) );
+		}
+
+		// Clear the update cache
+		delete_transient( 'jet_geometry_latest_release' );
+		
+		// Clear WordPress update cache
+		delete_site_transient( 'update_plugins' );
+		wp_clean_plugins_cache();
+
+		// Redirect back to plugins page with success message
+		$redirect_url = add_query_arg(
+			array(
+				'jet_geometry_update_check' => 'success',
+			),
+			admin_url( 'plugins.php' )
+		);
+
+		wp_safe_redirect( $redirect_url );
+		exit;
+	}
+
+	/**
+	 * Show update check notice
+	 */
+	public function show_update_check_notice() {
+		// Only show if we're on plugins.php
+		$screen = get_current_screen();
+		if ( ! $screen || 'plugins' !== $screen->id ) {
+			return;
+		}
+
+		// Check if update check was successful
+		if ( isset( $_GET['jet_geometry_update_check'] ) && 'success' === $_GET['jet_geometry_update_check'] ) {
+			?>
+			<div class="notice notice-success is-dismissible">
+				<p>
+					<strong><?php esc_html_e( 'JetEngine Geometry Addon:', 'jet-geometry-addon' ); ?></strong>
+					<?php esc_html_e( 'Update check completed. If an update is available, you will see it above.', 'jet-geometry-addon' ); ?>
+				</p>
+			</div>
+			<?php
+		}
 	}
 
 	/**
