@@ -311,7 +311,7 @@ class Jet_Country_Layers {
 			</button>
 
 			<label class="jet-country-layers-toggle">
-				<input type="checkbox" id="show-country-layers" class="toggle-checkbox">
+				<input type="checkbox" id="show-country-layers" class="toggle-checkbox jet-country-layers-checkbox">
 				<span class="toggle-slider"></span>
 				<span class="toggle-label"><?php esc_html_e( 'Show Country Layers', 'jet-geometry-addon' ); ?></span>
 			</label>

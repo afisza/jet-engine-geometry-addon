@@ -188,6 +188,39 @@
 				// Always persist when user explicitly toggles
 				self.toggleCountryLayers(isChecked, { persist: true });
 			});
+			
+			// Add touch support for mobile devices
+			$(document).on('touchstart', '.jet-country-layers-toggle', function(e) {
+				// Prevent double-tap zoom on iOS
+				if (e.originalEvent && e.originalEvent.touches && e.originalEvent.touches.length > 1) {
+					e.preventDefault();
+					return;
+				}
+			});
+			
+			$(document).on('touchend', '.jet-country-layers-toggle', function(e) {
+				e.preventDefault();
+				var $checkbox = $(this).find('.jet-country-layers-checkbox, #show-country-layers');
+				if ($checkbox.length) {
+					// Toggle checkbox state
+					$checkbox.prop('checked', !$checkbox.prop('checked'));
+					// Trigger change event
+					$checkbox.trigger('change');
+				}
+			});
+			
+			// Also handle click on label for better compatibility
+			$(document).on('click', '.jet-country-layers-toggle', function(e) {
+				// Only handle if click is not directly on checkbox
+				if ($(e.target).is('.toggle-checkbox, .jet-country-layers-checkbox')) {
+					return; // Let default behavior handle it
+				}
+				var $checkbox = $(this).find('.jet-country-layers-checkbox, #show-country-layers');
+				if ($checkbox.length) {
+					$checkbox.prop('checked', !$checkbox.prop('checked'));
+					$checkbox.trigger('change');
+				}
+			});
 
 			// Bind reset zoom
 			$(document).on('click', '.jet-geometry-reset-zoom', function(e) {

@@ -4,7 +4,7 @@ Tags: jetengine, maps, geometry, mapbox, geojson
 Requires at least: 6.0
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.3.5
+Stable tag: 1.0.3.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -75,6 +75,14 @@ Yes, the plugin integrates with JetEngine's existing page builder integrations.
 5. Drawing interface in action
 
 == Changelog ==
+
+= 1.0.3.6 =
+* Fixed "Show Country Layers" toggle not working on mobile devices (iPhone/iOS)
+* Improved touch event handling for mobile compatibility
+* Increased touch target size to 44px (iOS recommended size)
+* Added proper touch event handlers (touchstart/touchend)
+* Fixed checkbox visibility issues on iOS Safari
+* Improved CSS for better mobile responsiveness
 
 = 1.0.3.5 =
 * Added visual distinction for subcategories in incident-type filter (prefix "- " before subcategory names)
