@@ -3,7 +3,7 @@
  * Plugin Name: JetEngine Geometry Addon
  * Plugin URI: https://github.com/afisza/jet-engine-geometry-addon
  * Description: Extends JetEngine Maps Listing with Line and Polygon geometry support, plus country layers integration with Mapbox API
- * Version: 1.0.3.8
+ * Version: 1.0.3.9
  * Author: Alex Shram
  * Author URI: https://afisza.com
  * Text Domain: jet-geometry-addon
@@ -22,7 +22,7 @@ if ( ! defined( 'WPINC' ) ) {
 /**
  * Currently plugin version.
  */
-define( 'JET_GEOMETRY_ADDON_VERSION', '1.0.3.8' );
+define( 'JET_GEOMETRY_ADDON_VERSION', '1.0.3.9' );
 define( 'JET_GEOMETRY_ADDON_FILE', __FILE__ );
 define( 'JET_GEOMETRY_ADDON_PATH', plugin_dir_path( __FILE__ ) );
 define( 'JET_GEOMETRY_ADDON_URL', plugin_dir_url( __FILE__ ) );
@@ -540,6 +540,9 @@ class Jet_Engine_Geometry_Addon {
 
 		// Ensure consolidated GeoJSON file exists
 		Jet_Geometry_Country_Geojson_File::ensure_exists();
+		
+		// Auto-regenerate countries.json file on taxonomy changes
+		$this->setup_auto_regenerate_hooks();
 
 		// Initialize Elementor integration
 		if ( did_action( 'elementor/loaded' ) ) {
@@ -571,6 +574,89 @@ class Jet_Engine_Geometry_Addon {
 
 		// Allow other plugins to extend
 		do_action( 'jet-geometry-addon/init', $this );
+	}
+
+	/**
+	 * Setup hooks for auto-regenerating countries.json file
+	 */
+	private function setup_auto_regenerate_hooks() {
+		// Regenerate when country term is created, edited, or deleted
+		add_action( 'created_countries', array( $this, 'regenerate_countries_file' ), 20 );
+		add_action( 'edited_countries', array( $this, 'regenerate_countries_file' ), 20 );
+		add_action( 'delete_countries', array( $this, 'regenerate_countries_file' ), 20 );
+		
+		// Regenerate when country term meta is updated
+		add_action( 'updated_term_meta', array( $this, 'maybe_regenerate_on_meta_update' ), 10, 4 );
+		
+		// Regenerate when posts with countries taxonomy are saved
+		add_action( 'save_post', array( $this, 'maybe_regenerate_on_post_save' ), 20, 2 );
+		
+		// Regenerate when post is deleted
+		add_action( 'delete_post', array( $this, 'maybe_regenerate_on_post_delete' ), 20 );
+		
+		// Regenerate on term relationship changes
+		add_action( 'set_object_terms', array( $this, 'maybe_regenerate_on_term_relationship' ), 20, 6 );
+	}
+	
+	/**
+	 * Regenerate countries.json file
+	 */
+	public function regenerate_countries_file() {
+		Jet_Geometry_Country_Geojson_File::regenerate();
+	}
+	
+	/**
+	 * Maybe regenerate countries.json when term meta is updated
+	 */
+	public function maybe_regenerate_on_meta_update( $meta_id, $object_id, $meta_key, $meta_value ) {
+		// Only regenerate if it's a country-related meta key
+		if ( in_array( $meta_key, array( '_country_geojson', '_country_geojson_simplified', '_country_iso_code' ), true ) ) {
+			$term = get_term( $object_id );
+			if ( $term && ! is_wp_error( $term ) && 'countries' === $term->taxonomy ) {
+				Jet_Geometry_Country_Geojson_File::regenerate();
+			}
+		}
+	}
+	
+	/**
+	 * Maybe regenerate countries.json when post is saved
+	 */
+	public function maybe_regenerate_on_post_save( $post_id, $post ) {
+		// Skip autosaves and revisions
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+			return;
+		}
+		
+		if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+			return;
+		}
+		
+		// Only regenerate if post has countries taxonomy
+		$terms = wp_get_post_terms( $post_id, 'countries' );
+		if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+			// Use a small delay to ensure all meta is saved
+			add_action( 'shutdown', array( $this, 'regenerate_countries_file' ), 5 );
+		}
+	}
+	
+	/**
+	 * Maybe regenerate countries.json when post is deleted
+	 */
+	public function maybe_regenerate_on_post_delete( $post_id ) {
+		// Check if deleted post had countries taxonomy
+		$terms = wp_get_post_terms( $post_id, 'countries' );
+		if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+			Jet_Geometry_Country_Geojson_File::regenerate();
+		}
+	}
+	
+	/**
+	 * Maybe regenerate countries.json when term relationships change
+	 */
+	public function maybe_regenerate_on_term_relationship( $object_id, $terms, $tt_ids, $taxonomy, $append, $old_tt_ids ) {
+		if ( 'countries' === $taxonomy ) {
+			Jet_Geometry_Country_Geojson_File::regenerate();
+		}
 	}
 
 	/**
